@@ -1,0 +1,7 @@
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+plan.txt
+sandbox/*
+mp3/*
+**/__pycache__/
