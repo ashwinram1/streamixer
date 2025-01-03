@@ -5,3 +5,4 @@ plan.txt
 sandbox/*
 mp3/*
 **/__pycache__/
+terraform/.terraform*
