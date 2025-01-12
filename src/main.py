@@ -4,8 +4,8 @@ import vlc
 
 if __name__ == "__main__":
     playlist = [
-        Song(mp3_file_path="../mp3/one_only.mp3", crossfade_duration=5, start_time=100, end_time=127),
-        Song(mp3_file_path="../mp3/rich_flex.mp3", start_time=142)
+        Song(mp3_file_path="../mp3/members_only.mp3", crossfade_duration=5, start_time=90, end_time=110),
+        Song(mp3_file_path="../mp3/balloons.mp3", start_time=10)
     ]
 
     my_player = Player()
@@ -14,5 +14,7 @@ if __name__ == "__main__":
 
     for song in playlist:
         my_player.add_song(song)
+
+    print(my_player)
 
     my_player.start()

@@ -1,8 +1,8 @@
 **/.terraform/*
 *.tfstate
 *.tfstate.*
-plan.txt
+*.txt
 sandbox/*
 mp3/*
-**/__pycache__/
 terraform/.terraform*
+**/__pycache__/

@@ -31,7 +31,6 @@ class Song:
             start_time = self.start_time
         if end_time < 0:
             end_time = self.end_time
-        print(start_time, end_time)
         self.final_audio = self.full_audio[
             start_time * 1000:
             end_time * 1000

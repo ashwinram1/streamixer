@@ -20,6 +20,14 @@ class Player:
         self.head = first_song
         self.tail = first_song
         self.current_song = None
+    
+    def __str__(self):
+        curr = self.head
+        out = []
+        while curr:
+            out.append(f"[{str(curr)}]")
+            curr = curr.next_song
+        return ' -> '.join(out)
 
     def _create_crossfades(self):
         # Spawn len(song_queue) - 1 number of threads, where each thread will make the crossfade
@@ -97,7 +105,7 @@ class Player:
                     )
                 except Empty:
                     print("Timeout: Back awake")
-                    pass
+                    continue
                 if request == RequestType.PAUSE_PLAY:
                     print("PAUSE/PLAY")
                     self.is_playing = not self.is_playing
@@ -121,7 +129,7 @@ class Player:
                     seek_time = self.seek_time_queue.get()
                     print(f"SEEK: {seek_time}s")
                     self.player.set_time(seek_time * 1000)
-
+            
             self.current_song = self.current_song.prev_song if go_prev \
                 else self.current_song.next_song
 
