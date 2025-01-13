@@ -98,14 +98,14 @@ class Player:
             self.player.play()
             self.is_playing = True
             self.timer.set_time(0)
-            song_time_remaining = 10
+            song_time_remaining = pyglet_media.duration
             go_next = False
             go_prev = False
-            # Play the song and wait for requests until 10 seconds remaining in
+            # Play the song and wait for requests until 20 seconds remaining in
             # the song's final audio, at which point lock all requesting ability
             # (or ignore the incoming requests) and prepare for the crossfade
             # and/or the next song
-            while song_time_remaining >= 10:
+            while song_time_remaining >= 20:
                 song_time_remaining = pyglet_media.duration - self.timer.get_time()
                 print(f"{song_time_remaining=}")
                 request = None
@@ -154,6 +154,7 @@ class Player:
                     self.timer.set_time(pyglet_media.duration)
 
             # Continue to play out the current song and crossfade
+            print("Playing out remainder of current song...")
             while (pyglet_media.duration + crossfade_duration) - self.timer.get_time() > 1:
                 pass
             

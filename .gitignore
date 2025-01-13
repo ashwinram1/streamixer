@@ -6,3 +6,4 @@ sandbox/*
 mp3/*
 terraform/.terraform*
 **/__pycache__/
+*.json
