@@ -1,19 +1,21 @@
 from song import Song
 from player import Player
-import vlc
+import threading
+from utils import RequestType
+import time
+
 
 if __name__ == "__main__":
+    # Example song queue/playlist for testing
     playlist = [
-        Song(mp3_file_path="../mp3/members_only.mp3", crossfade_duration=5, start_time=90, end_time=110),
-        Song(mp3_file_path="../mp3/balloons.mp3", start_time=10)
+        Song(mp3_file_path="../mp3/members_only.mp3", crossfade_duration=2, start_time=90, end_time=110),
+        Song(mp3_file_path="../mp3/balloons.mp3", crossfade_duration=2, start_time=10, end_time=20),
+        Song(mp3_file_path="../mp3/members_only.mp3", crossfade_duration=2, start_time=90, end_time=110),
+        Song(mp3_file_path="../mp3/balloons.mp3", crossfade_duration=2, start_time=10, end_time=20),
+        Song(mp3_file_path="../mp3/members_only.mp3", start_time=90, end_time=110)
     ]
 
-    my_player = Player()
-
-    # my_player.add_song(playlist[1])
-
-    for song in playlist:
-        my_player.add_song(song)
+    my_player = Player(song_queue=playlist)
 
     print(my_player)
 

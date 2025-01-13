@@ -1,100 +1,112 @@
-import vlc
-from typing import List
+import pyglet
 from song import Song
 from queue import Queue, Empty
 from utils import RequestType
-import threading
+from typing import List
+import os
 
 
 class Player:
-    def __init__(self, first_song: Song=None):
-        self.instance = vlc.Instance()
-        self.player = self.instance.media_player_new()
+    def __init__(self, song_queue: List[Song]=[]):
+        self.song_queue = song_queue
+        self.current_song_index = 0
+        self.group = pyglet.media.SourceGroup()
+        self.player = pyglet.media.Player()
+        self.player.queue(self.group)
+        self.timer = pyglet.media.PlaybackTimer()
         self.request_queue = Queue()
         self.seek_time_queue = Queue()
         self.is_playing = False
-        self._create_crossfades()
-
-        # For tracking the linked-list song queue
-        self.num_songs = 1 if first_song else 0
-        self.head = first_song
-        self.tail = first_song
-        self.current_song = None
     
     def __str__(self):
-        curr = self.head
-        out = []
-        while curr:
-            out.append(f"[{str(curr)}]")
-            curr = curr.next_song
-        return ' -> '.join(out)
+        return str([str(song) for song in self.song_queue])
+    
+    def _set_crossfade(self, current_song, next_song):
+        this_song_snippet = current_song.start_end_audio[
+            -(current_song.crossfade_duration * 1000):
+        ]
+        next_song_snippet = next_song.start_end_audio[
+            :(current_song.crossfade_duration * 1000)
+        ]
+        crossfade_audio = this_song_snippet.append(
+            next_song_snippet,
+            crossfade=current_song.crossfade_duration*1000
+        )
 
-    def _create_crossfades(self):
-        # Spawn len(song_queue) - 1 number of threads, where each thread will make the crossfade
-        # between its assigned song and the next song in the queue
-        pass
+        # Set the file path and name of the crossfade audio file
+        current_song.crossfade_audio_mp3_file_path = \
+            (f"{current_song.mp3_file_dir}/crossfades/"
+             f"{current_song.song_name}"
+             f"_X_{next_song.song_name}.mp3")
+        
+        # Save the crossfade audio file
+        crossfade_audio.export(current_song.crossfade_audio_mp3_file_path, format="mp3")
+    
+    def _load_song(self, full_mp3_file_path):
+        print(full_mp3_file_path)
+        pyglet_media = pyglet.media.load(full_mp3_file_path)
+        os.remove(full_mp3_file_path)
+        print(f"LOADED & DELETING {full_mp3_file_path}")
+        return pyglet_media
+    
+    def _prepare_next_song(self, current_song, next_song):
+        # Create the final audio for the next song
+        # Adjust the start and end times of the next song as needed to accommodate
+        # for the current song's crossfade, as well as the next song's crossfade
+        next_song.set_final_audio(
+            start_time=next_song.start_time + current_song.crossfade_duration,
+            end_time=next_song.end_time - next_song.crossfade_duration
+        )
 
-    def add_song(self, song: Song):
-        if not self.head:
-            self.head = song
-            self.tail = song
-        else:
-            song.prev_song = self.tail
-            self.tail.set_next_song(song)
-            self.tail = song
-        self.head.prev_song = None
-        self.tail.next_song = None
-        self.num_songs += 1
+        # Create and queue the crossfade audio file of this current song
+        # (if this song expects a crossfade)
+        crossfade_duration = 0
+        if current_song.crossfade_duration > 0:
+            self._set_crossfade(current_song, next_song)
+            pyglet_crossfade = self._load_song(
+                current_song.crossfade_audio_mp3_file_path
+            )
+            self.group.add(pyglet_crossfade)
+            crossfade_duration = pyglet_crossfade.duration
+            print("Queued current song's crossfade")
 
-    def remove_song(self, song: Song):
-        if self.head == song:
-            self.head = song.next_song
-            if not self.head:
-                self.tail = None
-            else:
-                self.head.prev_song = None
-        elif self.tail == song:
-            self.tail = song.prev_song
-            self.tail.next_song = None
-        else:
-            prev_song = song.prev_song
-            next_song = song.next_song
-            prev_song.next_song = next_song
-            next_song.prev_song = prev_song
-        song.prev_song = None
-        song.next_song = None
-        self.num_songs -= 1
+        # Queue the next song
+        next_pyglet_media = self._load_song(next_song.get_full_mp3_file_path())
+        self.group.add(next_pyglet_media)
+        print("Queued next song")
 
-    def insert_song(self, song: Song):
-        song.prev_song = self.current_song
-        song.next_song = self.current_song.next_song
-        self.current_song.next_song = song
-        self.current_song.next_song.prev_song = song
-
-    def _play_song(self, mp3_file_path: str):
-        media = self.instance.media_new(mp3_file_path)
-        self.player.set_media(media)
-        self.player.play()
-        self.is_playing = True
-        print(f"Playing: {mp3_file_path}")
+        return crossfade_duration, next_pyglet_media
 
     def _start(self):
-        self.current_song = self.head
-        while self.current_song:
-            # Ideally, we spawn a thread here to go create and insert the crossfade rather
-            # than creating the crossfade when the songs are added and rather than
-            # doing the insert serially here
-            if self.current_song.crossfade_audio_mp3_file_path:
-                self.insert_song(Song(self.current_song.crossfade_audio_mp3_file_path))
-            self._play_song(self.current_song.get_full_mp3_file_path())
-            song_time_remaining = 1
+        # Initial set up for first song in queue
+        current_song = self.song_queue[self.current_song_index]
+        current_song.set_final_audio(
+            end_time=current_song.end_time - current_song.crossfade_duration
+        )
+        pyglet_media = self._load_song(
+            current_song.get_full_mp3_file_path()
+        )
+        self.group.add(pyglet_media)
+        self.timer.start()
+
+        # Start main control loop
+        while self.current_song_index < len(self.song_queue):
+            current_song = self.song_queue[self.current_song_index]
+            next_song = self.song_queue[self.current_song_index + 1] \
+            if self.current_song_index < len(self.song_queue) - 1 else None
+
+            self.player.play()
+            self.is_playing = True
+            self.timer.set_time(0)
+            song_time_remaining = 10
+            go_next = False
             go_prev = False
-            while song_time_remaining >= 1:
-                while (self.player.get_state() != vlc.State.Playing
-                       and self._get_position() == 0.0):
-                    pass
-                song_time_remaining = self._get_duration() \
-                    - self._get_position()
+            # Play the song and wait for requests until 10 seconds remaining in
+            # the song's final audio, at which point lock all requesting ability
+            # (or ignore the incoming requests) and prepare for the crossfade
+            # and/or the next song
+            while song_time_remaining >= 10:
+                song_time_remaining = pyglet_media.duration - self.timer.get_time()
                 print(f"{song_time_remaining=}")
                 request = None
                 try:
@@ -104,7 +116,7 @@ class Player:
                         timeout=(song_time_remaining / 2)
                     )
                 except Empty:
-                    print("Timeout: Back awake")
+                    print("Back awake")
                     continue
                 if request == RequestType.PAUSE_PLAY:
                     print("PAUSE/PLAY")
@@ -115,29 +127,38 @@ class Player:
                         self.player.pause()
                 elif request == RequestType.NEXT:
                     print("NEXT")
-                    self.player.stop()
+                    go_next = True
                     break
+                # As of now there is no way to go back to the previous song,
+                # so a PREV request just rewinds to the beginning of the current
+                # song
                 elif request == RequestType.PREV:
+                    # TODO: Modify data structures to enable going back to previous songs
                     print("PREV")
-                    if self._get_position() > 3:
-                        self.player.set_time(0)
-                    else:
-                        self.player.stop()
-                        go_prev = True
-                        break
+                    self.player.seek(0)
+                    self.timer.set_time(0)
+                    continue
                 elif request == RequestType.SEEK:
                     seek_time = self.seek_time_queue.get()
                     print(f"SEEK: {seek_time}s")
-                    self.player.set_time(seek_time * 1000)
+                    self.player.seek(seek_time)
+                    self.timer.set_time(seek_time)
+
+            crossfade_duration = 0
+            next_pyglet_media = None
+            if next_song:
+                crossfade_duration, next_pyglet_media = self._prepare_next_song(current_song, next_song)
+
+                if go_next:
+                    self.player.seek(pyglet_media.duration)
+                    self.timer.set_time(pyglet_media.duration)
+
+            # Continue to play out the current song and crossfade
+            while (pyglet_media.duration + crossfade_duration) - self.timer.get_time() > 1:
+                pass
             
-            self.current_song = self.current_song.prev_song if go_prev \
-                else self.current_song.next_song
-
-    def _get_position(self):
-        return self.player.get_time() / 1000  # Convert to seconds
-
-    def _get_duration(self):
-        return self.player.get_length() / 1000
+            self.current_song_index += 1
+            pyglet_media = next_pyglet_media
 
     def start(self):
         self._start()
